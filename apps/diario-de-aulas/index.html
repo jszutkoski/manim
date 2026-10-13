@@ -1826,6 +1826,7 @@
     }
     return '<div class="nota"><div><p>' + esc(n.texto) + "</p><time>" + esc(carimbo(n.em)) + "</time></div>" +
       '<span class="nota-acoes">' +
+      '<button class="copiar" data-acao="copiar-nota" data-aula="' + esc(a.id) + '" data-nota="' + esc(n.id) + '" type="button" aria-label="Copiar anotação" title="Copiar anotação">⧉</button>' +
       '<button class="editar" data-acao="editar-nota" data-nota="' + esc(n.id) + '" type="button" aria-label="Editar anotação" title="Editar anotação">✎</button>' +
       '<button class="apagar" data-acao="apagar-nota" data-aula="' + esc(a.id) + '" data-nota="' + esc(n.id) + '" type="button" aria-label="Apagar anotação" title="Apagar anotação">✕</button>' +
       "</span></div>";
@@ -2439,6 +2440,18 @@
     agendarDesenho();
   }
 
+  async function copiarNota(aulaId, notaId) {
+    const aula = porId(estado.aulas, aulaId);
+    const nota = aula && (aula.notas || []).find((n) => n.id === notaId);
+    if (!nota) return;
+    try {
+      await navigator.clipboard.writeText(nota.texto);
+      avisar("Anotação copiada.");
+    } catch (e) {
+      avisar("Não consegui copiar agora. Tente novamente.");
+    }
+  }
+
   function abrirEdicaoNota(notaId) {
     estado.notaEditandoId = notaId;
     agendarDesenho();
@@ -2516,6 +2529,7 @@
     else if (acao === "apagar-nota") apagarNota(alvo.dataset.aula, alvo.dataset.nota);
     else if (acao === "abrir-notas-modal") abrirNotasModal(alvo.dataset.aula);
     else if (acao === "fechar-notas-modal") fecharNotasModal();
+    else if (acao === "copiar-nota") copiarNota(alvo.dataset.aula, alvo.dataset.nota);
     else if (acao === "editar-nota") abrirEdicaoNota(alvo.dataset.nota);
     else if (acao === "cancelar-edicao-nota") cancelarEdicaoNota();
     else if (acao === "salvar-edicao-nota") salvarEdicaoNota(alvo.dataset.aula, alvo.dataset.nota);
