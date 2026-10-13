@@ -35,7 +35,8 @@ mantidos no vault do Obsidian.
 - **Editar o cronograma completo** — ao expandir o cronograma, clique no horário, no assunto ou
   na unidade de qualquer aula para editar ali mesmo. Se outras aulas caírem no mesmo dia da
   semana e horário (as aulas semanais de uma turma, por exemplo), o app pergunta se a mudança
-  deve valer para elas também.
+  deve valer para elas também. A coluna de anotações abre uma janela com as anotações daquela
+  aula, onde dá pra ler, editar o texto ou adicionar uma nova sem precisar navegar até o card.
 - **Etiquetas por aula** — marque uma aula com "Prova", "Revisão" ou qualquer etiqueta livre.
   Aparecem no card, no cronograma completo e no markdown exportado.
 - **Conteúdo pendente** — escreva, numa aula, o que sobrou pra próxima vez ("não deu tempo dos
