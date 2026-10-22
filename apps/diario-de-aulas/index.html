@@ -795,6 +795,20 @@
 
   .linha-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 
+  .backup-titulo {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 22px 0 8px;
+  }
+  .backup-nota { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
+  .backup-botoes { display: flex; gap: 10px; flex-wrap: wrap; }
+  #capa-backup input[type="file"] { display: block; max-width: 100%; margin-bottom: 10px; font-size: 13px; color: var(--ink-2); }
+  #backup-texto { min-height: 96px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.55; }
+  #capa-backup .previa { margin-top: 12px; }
+
   @media (max-width: 620px) {
     .aula { grid-template-columns: 52px 1fr; gap: 14px; padding: 17px 16px; }
     .cal .dia { font-size: 25px; }
@@ -819,6 +833,7 @@
       <span class="brand-sub" id="periodo-atual"></span>
     </div>
     <div class="topbar-actions">
+      <button class="btn btn-sm" id="btn-backup" type="button">Backup</button>
       <button class="btn btn-sm" id="btn-exportar" type="button">Exportar</button>
       <button class="btn btn-sm btn-primary" id="btn-importar" type="button">Importar plano</button>
     </div>
@@ -919,6 +934,38 @@
       <div class="direita">
         <button class="btn" id="btn-editar-cancelar" type="button">Cancelar</button>
         <button class="btn btn-primary" id="btn-editar-salvar" type="button">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="capa" id="capa-backup" hidden>
+  <div class="folha folha-media" role="dialog" aria-modal="true" aria-labelledby="titulo-backup">
+    <div class="folha-topo">
+      <div>
+        <h2 id="titulo-backup">Backup completo</h2>
+        <p>Guarda tudo — disciplinas, cronogramas, anotações, etiquetas e pendências — num único arquivo que dá pra restaurar depois, neste ou em outro aparelho.</p>
+      </div>
+      <button class="fechar" id="fechar-backup" type="button" aria-label="Fechar">✕</button>
+    </div>
+
+    <h3 class="backup-titulo">Guardar</h3>
+    <p class="backup-nota" id="backup-resumo"></p>
+    <div class="backup-botoes">
+      <button class="btn btn-primary" id="btn-backup-baixar" type="button">Baixar backup (.json)</button>
+      <button class="btn" id="btn-backup-copiar" type="button">Copiar JSON</button>
+    </div>
+
+    <h3 class="backup-titulo">Restaurar</h3>
+    <p class="backup-nota">Escolha um arquivo de backup ou cole o conteúdo dele. Nada do que já existe é apagado: disciplinas e aulas com o mesmo identificador voltam como estavam no backup, e o resto fica como está.</p>
+    <input type="file" id="backup-arquivo" accept=".json,application/json" aria-label="Arquivo de backup">
+    <textarea id="backup-texto" spellcheck="false" placeholder="…ou cole aqui o conteúdo do backup"></textarea>
+    <div class="previa" id="backup-previa"></div>
+
+    <div class="folha-acoes">
+      <div class="direita">
+        <button class="btn" id="btn-backup-fechar" type="button">Fechar</button>
+        <button class="btn btn-primary" id="btn-backup-restaurar" type="button" disabled>Restaurar</button>
       </div>
     </div>
   </div>
@@ -2280,30 +2327,224 @@
     return md;
   }
 
-  async function exportar(discId) {
-    const md = markdownDe(discId);
-    const d = discId ? porId(estado.disciplinas, discId) : null;
-    const nomeArquivo = "diario-" + (d ? chave(d.nome).replace(/\s+/g, "-") : "todas-as-disciplinas") + ".md";
-
+  // oferece o arquivo para download; sem a capacidade (ou se falhar), copia o conteúdo
+  async function entregarArquivo(nome, conteudo, msgSalvo, msgCopiado) {
     let baixar = null;
     try { baixar = window.claude && window.claude.use ? await window.claude.use("downloads") : null; }
     catch (e) { baixar = null; }
 
     if (baixar) {
       try {
-        await baixar.save({ filename: nomeArquivo, data: md });
-        avisar("Arquivo salvo — arraste para o seu vault.");
+        await baixar.save({ filename: nome, data: conteudo });
+        avisar(msgSalvo);
         return;
       } catch (e) {
         if (e && e.code === "declined") return;
       }
     }
     try {
-      await navigator.clipboard.writeText(md);
-      avisar("Markdown copiado — cole em uma nota do Obsidian.");
+      await navigator.clipboard.writeText(conteudo);
+      avisar(msgCopiado);
     } catch (e) {
       avisar("Não consegui exportar agora. Tente novamente em instantes.");
     }
+  }
+
+  async function exportar(discId) {
+    const md = markdownDe(discId);
+    const d = discId ? porId(estado.disciplinas, discId) : null;
+    const nomeArquivo = "diario-" + (d ? chave(d.nome).replace(/\s+/g, "-") : "todas-as-disciplinas") + ".md";
+    await entregarArquivo(nomeArquivo, md, "Arquivo salvo — arraste para o seu vault.", "Markdown copiado — cole em uma nota do Obsidian.");
+  }
+
+  /* ============================================================
+     backup completo (json)
+     ============================================================ */
+
+  const VERSAO_BACKUP = 1;
+  const ID_VALIDO = /^[A-Za-z0-9_\-.~:@+]{1,200}$/;
+  const backup = { lido: null };
+
+  function idValido(v) { return typeof v === "string" && ID_VALIDO.test(v) && v !== "." && v !== ".."; }
+  function textoOu(v, padrao) { return typeof v === "string" ? v : padrao; }
+  function horaOuNulo(v) { return typeof v === "string" && /^\d{1,2}:\d{2}$/.test(v) ? v : null; }
+  function numeroOu(v, padrao) { return typeof v === "number" && isFinite(v) ? v : padrao; }
+
+  function plural(n, um, varios) { return n + " " + (n === 1 ? um : varios); }
+  function resumoDe(disciplinas, aulas) {
+    const notas = aulas.reduce((soma, a) => soma + (Array.isArray(a.notas) ? a.notas.length : 0), 0);
+    return plural(disciplinas.length, "disciplina", "disciplinas") + " · " + plural(aulas.length, "aula", "aulas") + " · " + plural(notas, "anotação", "anotações");
+  }
+
+  function montarBackup() {
+    return {
+      app: "diario-de-aulas",
+      versao: VERSAO_BACKUP,
+      exportadoEm: new Date().toISOString(),
+      disciplinas: estado.disciplinas.map((d) => Object.assign({}, d)),
+      aulas: estado.aulas.map((a) => Object.assign({}, a))
+    };
+  }
+
+  function sanitizarDisciplina(d) {
+    const out = {
+      id: d.id,
+      nome: d.nome.trim(),
+      curso: textoOu(d.curso, ""),
+      codigo: textoOu(d.codigo, ""),
+      sala: textoOu(d.sala, ""),
+      horario: textoOu(d.horario, ""),
+      cor: typeof d.cor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(d.cor) ? d.cor : CORES[0],
+      criadoEm: numeroOu(d.criadoEm, Date.now()),
+      arquivada: d.arquivada === true
+    };
+    if (typeof d.local === "string") out.local = d.local; // campo antigo, ainda lido como sala
+    return out;
+  }
+
+  function sanitizarAula(a) {
+    return {
+      id: a.id,
+      disciplinaId: a.disciplinaId,
+      data: a.data,
+      inicio: horaOuNulo(a.inicio),
+      fim: horaOuNulo(a.fim),
+      assunto: a.assunto,
+      unidade: textoOu(a.unidade, ""),
+      ordem: numeroOu(a.ordem, 0),
+      pendencia: textoOu(a.pendencia, ""),
+      tags: (Array.isArray(a.tags) ? a.tags : []).filter((t) => typeof t === "string" && t.trim()),
+      notas: (Array.isArray(a.notas) ? a.notas : [])
+        .filter((n) => n && typeof n === "object" && idValido(n.id) && typeof n.texto === "string" && n.texto.trim())
+        .map((n) => ({ id: n.id, texto: n.texto, em: numeroOu(n.em, Date.now()) }))
+    };
+  }
+
+  // Valida o conteúdo de um backup (tudo que vem de fora é tratado como não confiável) e
+  // devolve só o que é seguro gravar, junto com um resumo para a prévia.
+  function lerBackup(texto) {
+    const bruto = String(texto || "").trim();
+    if (!bruto) return { vazio: true };
+
+    let dados;
+    try { dados = JSON.parse(bruto); }
+    catch (e) { return { erro: "Isso não parece um backup: o conteúdo não é um JSON válido. Confira se copiou o arquivo inteiro." }; }
+
+    if (!dados || typeof dados !== "object" || dados.app !== "diario-de-aulas" || !Array.isArray(dados.disciplinas) || !Array.isArray(dados.aulas)) {
+      return { erro: "Esse JSON não é um backup do Diário de Aulas." };
+    }
+    if (numeroOu(dados.versao, 0) > VERSAO_BACKUP) {
+      return { erro: "Esse backup foi gerado por uma versão mais nova do app e não dá pra restaurar aqui." };
+    }
+
+    let ignorados = 0;
+    const disciplinas = [];
+    const idsDisc = new Set();
+    dados.disciplinas.forEach((d) => {
+      if (!d || typeof d !== "object" || !idValido(d.id) || typeof d.nome !== "string" || !d.nome.trim() || idsDisc.has(d.id)) { ignorados++; return; }
+      idsDisc.add(d.id);
+      disciplinas.push(sanitizarDisciplina(d));
+    });
+
+    const aulas = [];
+    const idsAula = new Set();
+    dados.aulas.forEach((a) => {
+      const ok = a && typeof a === "object" && idValido(a.id) && !idsAula.has(a.id) &&
+        typeof a.assunto === "string" && typeof a.data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(a.data) &&
+        (idsDisc.has(a.disciplinaId) || !!porId(estado.disciplinas, a.disciplinaId));
+      if (!ok) { ignorados++; return; }
+      idsAula.add(a.id);
+      aulas.push(sanitizarAula(a));
+    });
+
+    if (!disciplinas.length && !aulas.length) return { erro: "Não encontrei nenhuma disciplina ou aula válida nesse backup." };
+
+    return {
+      dados: { disciplinas: disciplinas, aulas: aulas },
+      ignorados: ignorados,
+      jaExistem: disciplinas.filter((d) => porId(estado.disciplinas, d.id)).length + aulas.filter((a) => porId(estado.aulas, a.id)).length,
+      exportadoEm: typeof dados.exportadoEm === "string" ? dados.exportadoEm : ""
+    };
+  }
+
+  function abrirBackup() {
+    $("#backup-resumo").textContent = estado.disciplinas.length
+      ? "Agora há " + resumoDe(estado.disciplinas, estado.aulas) + "."
+      : "Ainda não há nada para guardar.";
+    $("#btn-backup-baixar").disabled = !estado.disciplinas.length;
+    $("#btn-backup-copiar").disabled = !estado.disciplinas.length;
+    $("#backup-texto").value = "";
+    $("#backup-arquivo").value = "";
+    atualizarPreviaBackup();
+    $("#capa-backup").hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function fecharBackup() {
+    $("#capa-backup").hidden = true;
+    document.body.style.overflow = "";
+    backup.lido = null;
+  }
+
+  function atualizarPreviaBackup() {
+    const lido = lerBackup($("#backup-texto").value);
+    backup.lido = lido.dados ? lido : null;
+    const caixa = $("#backup-previa");
+    const botao = $("#btn-backup-restaurar");
+
+    if (lido.vazio) {
+      caixa.innerHTML = '<p style="margin:0;font-size:13px;color:var(--ink-3)">A prévia do que será restaurado aparece aqui.</p>';
+      botao.disabled = true;
+      return;
+    }
+    if (lido.erro) {
+      caixa.innerHTML = '<p style="margin:0;font-size:13px;color:var(--warm)">' + esc(lido.erro) + "</p>";
+      botao.disabled = true;
+      return;
+    }
+
+    const quando = lido.exportadoEm ? new Date(lido.exportadoEm) : null;
+    caixa.innerHTML =
+      '<div class="previa-topo"><strong>' + esc(resumoDe(lido.dados.disciplinas, lido.dados.aulas)) + "</strong>" +
+      (quando && !isNaN(quando) ? '<span style="font-size:12.5px;color:var(--ink-3)">backup de ' + esc(carimbo(quando.getTime())) + "</span>" : "") + "</div>" +
+      '<p style="margin:0;font-size:13px;color:var(--ink-2)">' +
+      (lido.jaExistem
+        ? plural(lido.jaExistem, "item já existe e volta", "itens já existem e voltam") + " como estava no backup; o restante é novo."
+        : "Tudo isso é novo por aqui.") + "</p>" +
+      (lido.ignorados ? '<p class="aviso">' + plural(lido.ignorados, "item inválido foi ignorado", "itens inválidos foram ignorados") + ".</p>" : "");
+    botao.disabled = false;
+  }
+
+  async function baixarBackup() {
+    const nome = "diario-de-aulas-backup-" + isoDe(new Date()) + ".json";
+    await entregarArquivo(nome, JSON.stringify(montarBackup(), null, 2),
+      "Backup salvo — guarde esse arquivo num lugar seguro.", "Backup copiado — cole num arquivo .json e guarde num lugar seguro.");
+  }
+
+  async function copiarBackup() {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(montarBackup(), null, 2));
+      avisar("Backup copiado — cole num arquivo .json e guarde num lugar seguro.");
+    } catch (e) {
+      avisar("Não consegui copiar agora. Tente novamente.");
+    }
+  }
+
+  async function restaurarBackup() {
+    const lido = backup.lido;
+    if (!lido) return;
+    $("#btn-backup-restaurar").disabled = true;
+
+    const tarefas = lido.dados.disciplinas.map((d) => () => salvarDisciplina(d))
+      .concat(lido.dados.aulas.map((a) => () => salvarAula(a)));
+    for (let i = 0; i < tarefas.length; i += 10) {
+      await Promise.all(tarefas.slice(i, i + 10).map((gravar) => gravar()));
+    }
+
+    const resumo = resumoDe(lido.dados.disciplinas, lido.dados.aulas);
+    fecharBackup();
+    agendarDesenho();
+    avisar("Backup restaurado: " + resumo + ".");
   }
 
   /* ============================================================
@@ -2483,6 +2724,14 @@
   }
 
   document.addEventListener("click", (ev) => {
+    if (!$("#capa-backup").hidden) {
+      if (ev.target.closest("#btn-backup-baixar")) baixarBackup();
+      else if (ev.target.closest("#btn-backup-copiar")) copiarBackup();
+      else if (ev.target.closest("#btn-backup-restaurar")) restaurarBackup();
+      else if (ev.target.closest("#fechar-backup") || ev.target.closest("#btn-backup-fechar") || ev.target === $("#capa-backup")) fecharBackup();
+      return;
+    }
+
     if (!$("#capa-editar").hidden) {
       const corEditar = ev.target.closest("[data-cor-editar]");
       if (corEditar) { editor.cor = corEditar.dataset.corEditar; desenharCores("#cores-editar", editor.cor, "data-cor-editar"); return; }
@@ -2501,6 +2750,7 @@
     if (aba) { estado.aba = aba.dataset.aba; estado.todasAsAulas = false; agendarDesenho(); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
 
     if (ev.target.closest("#aba-nova") || ev.target.closest("#btn-importar")) { abrirImportador(null); return; }
+    if (ev.target.closest("#btn-backup")) { abrirBackup(); return; }
     if (ev.target.closest("#btn-exportar")) {
       if (!estado.disciplinas.length) { avisar("Importe um plano de ensino antes de exportar."); return; }
       exportar(estado.aba === "painel" ? null : estado.aba);
@@ -2597,6 +2847,16 @@
     }
   });
 
+  document.addEventListener("change", async (ev) => {
+    if (ev.target.id !== "backup-arquivo") return;
+    const arquivo = ev.target.files && ev.target.files[0];
+    if (!arquivo) return;
+    try { $("#backup-texto").value = await arquivo.text(); }
+    catch (e) { avisar("Não consegui ler esse arquivo. Abra-o num editor e cole o conteúdo no campo."); return; }
+    ev.target.value = "";
+    atualizarPreviaBackup();
+  });
+
   document.addEventListener("input", (ev) => {
     const campo = ev.target;
     if (campo.dataset && campo.dataset.campoNota) {
@@ -2615,6 +2875,7 @@
       return;
     }
     if (campo.id === "entrada" || campo.id === "campo-ano") atualizarPrevia();
+    if (campo.id === "backup-texto") atualizarPreviaBackup();
   });
 
   document.addEventListener("keydown", (ev) => {
@@ -2643,6 +2904,7 @@
       salvarEdicao();
       return;
     }
+    if (ev.key === "Escape" && !$("#capa-backup").hidden) { fecharBackup(); return; }
     if (ev.key === "Escape" && !$("#capa-editar").hidden) { fecharEditor(); return; }
     if (ev.key === "Escape" && !$("#capa-confirmar").hidden) { responder(false); return; }
     if (ev.key === "Escape" && !$("#capa-importador").hidden) { fecharImportador(); return; }

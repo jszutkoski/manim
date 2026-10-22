@@ -28,6 +28,13 @@ mantidos no vault do Obsidian.
   ser aplicado de uma vez a todas as aulas do cronograma quando o horário da turma muda.
 - **Exportar** — gera o diário em markdown (aula seguida das anotações) para salvar como `.md`
   ou copiar de volta para o vault.
+- **Backup completo** — o botão "Backup" do topo baixa (ou copia) um `.json` com tudo:
+  disciplinas, cronogramas, anotações, etiquetas, pendências e disciplinas arquivadas. Para
+  restaurar, escolha o arquivo ou cole o conteúdo; uma prévia mostra o que será restaurado antes
+  de aplicar. A restauração só acrescenta e sobrescreve por identificador — nunca apaga o que já
+  existe — então serve tanto para recuperar dados perdidos quanto para levar tudo para outro
+  artifact. Tudo que vem do arquivo é validado: itens inválidos são ignorados e contados na prévia.
+  O markdown do "Exportar" é para ler; o backup é para restaurar.
 - **Verificar duplicatas** — na aba da disciplina, funde aulas com a mesma data, horário e
   assunto (ignorando maiúsculas, acentos e espaçamento) em uma só, preservando as anotações de
   todas antes de apagar as repetidas. Roda também sozinho, uma vez, quando o app carrega — cobre
@@ -91,7 +98,8 @@ horario: 19:00–20:40
 Publicado como Artifact, o app guarda disciplinas, aulas e comentários no banco do próprio
 artifact — os dados acompanham a conta em qualquer aparelho. Se esse armazenamento não estiver
 disponível na sessão, o app avisa no topo e passa a guardar tudo no `localStorage` do navegador;
-ao reconectar, o conteúdo local é enviado para a nuvem uma única vez.
+ao reconectar, o conteúdo local é enviado para a nuvem uma única vez. Como esse banco é a única
+cópia dos dados, vale baixar um backup de tempos em tempos.
 
 ## Como executar
 
