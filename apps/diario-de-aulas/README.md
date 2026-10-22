@@ -21,10 +21,24 @@ mantidos no vault do Obsidian.
   - *Andamento do semestre*: aulas dadas sobre o total de cada disciplina, e quantas já têm
     anotação.
 - **Aba da disciplina** — as duas aulas anteriores e a próxima, uma abaixo da outra, cada uma
-  com data, horário, sala, assunto e comentários. Abaixo, o cronograma completo recolhido.
+  com data, horário, sala, assunto e comentários. Em seguida o progresso por unidade (abaixo) e
+  o cronograma completo recolhido.
+- **Progresso por unidade** — as aulas são agrupadas pela unidade do cronograma. Cada unidade
+  mostra o período, quantas aulas já foram dadas sobre o total (a de hoje só conta depois que
+  o dia passa), uma barra, o selo "Concluída" ou "Em andamento" (a que contém a próxima aula
+  fica em destaque) e a frequência da unidade. Aulas sem unidade aparecem como "Sem unidade";
+  se nenhuma aula tem unidade, o bloco só mostra a frequência, quando houver.
+- **Presença** — em cada aula que já começou, "+ registrar presença" pede o número de alunos
+  presentes; o campo também está na janela da aula, aberta pela coluna *Presença* ou
+  *Anotações* do cronograma (útil para aulas mais antigas, fora dos três cards). Com o total de
+  alunos cadastrado em *Editar disciplina*, a presença aparece como "27 de 32 · 84%" e não
+  aceita mais presentes do que alunos; sem o total, mostra só o número e a média de presentes.
+  A frequência média entra no bloco de progresso, e a presença vai para o markdown exportado.
 - **Importar plano de ensino** — cole o markdown da nota e confirme a prévia do que foi lido.
-  Reimportar a mesma disciplina atualiza o cronograma preservando os comentários já escritos.
-- **Editar disciplina** — nome, curso, código ou turma, sala, horário padrão e cor. O horário pode
+  Reimportar a mesma disciplina atualiza o cronograma preservando o que já foi registrado nas
+  aulas: anotações, etiquetas, pendências e presença.
+- **Editar disciplina** — nome, curso, código ou turma, sala, horário padrão, total de alunos e
+  cor. O horário pode
   ser aplicado de uma vez a todas as aulas do cronograma quando o horário da turma muda.
 - **Exportar** — gera o diário em markdown (aula seguida das anotações) para salvar como `.md`
   ou copiar de volta para o vault.
